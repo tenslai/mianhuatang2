@@ -423,6 +423,8 @@ scheduling tracking, please set `WANDB_MODE=online` before running/importing Dis
                 is_complete = cur_t == -1
                 is_display_step = args.display_rate > 0 and j % args.display_rate == 0
 
+                print(args.save_rate, is_save_step, j)
+
                 threads.append(
                     _sample_thread(
                         sample,
