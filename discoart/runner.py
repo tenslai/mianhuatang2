@@ -26,7 +26,7 @@ from .helper import (
 )
 from .nn.helper import set_seed, detach_gpu
 from .nn.losses import spherical_dist_loss, tv_loss, range_loss
-from .nn.make_cutouts import MakeCutouts
+from .nn.make_cutouts import MakeCutouts, Resize
 from .nn.sec_diff import alpha_sigma_to_t
 from .nn.transform import symmetry_transformation_fn, inv_normalize
 from .persist import _sample_thread, _persist_thread, _save_progress_thread
@@ -224,9 +224,15 @@ def do_run(
                     IC_Grey_P=scheduler.cut_icgray_p,
                 )
 
+                resize = Resize(model_stat['input_resolution'])
+
+                resize_x_in = resize(x_in.add(1).div(2))
+
+                cut_loss = 0
+
                 for _ in range(scheduler.cutn_batches):
 
-                    clip_in = cuts(x_in.add(1).div(2))
+                    clip_in = cuts(resize_x_in)
 
                     if args.visualize_cuts and not is_cuts_visualized:
                         _cuts_da = DocumentArray.empty(clip_in.shape[0])
@@ -251,21 +257,21 @@ def do_run(
 
                     dists = dists.view(
                         [
-                            scheduler.cut_overview + scheduler.cut_innercut,
+                            clip_in.shape[0],
                             x.shape[0],
                             -1,
                         ]
                     )
 
-                    cut_loss = (
+                    cut_loss += (
                         dists.mul(masked_weights).sum(2).mean(0).sum()
                         * scheduler.clip_guidance_scale
                         / scheduler.cutn_batches
                     )
 
-                    x_in_grad += torch.autograd.grad(cut_loss, x_in)[0]
+                x_in_grad += torch.autograd.grad(cut_loss, x_in)[0]
 
-                    cut_losses += cut_loss.detach().item()
+                cut_losses += cut_loss.detach().item()
 
         x_is_NaN = False
         if isinstance(x_in_grad, int) and x_in_grad == 0:
